@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MWIV Triage Health Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F4F5F7; color: #172B4D; }
+header { background: #0052CC; color: white; padding: 20px 32px; display: flex; align-items: center; justify-content: space-between; }
+header h1 { font-size: 1.35rem; font-weight: 700; }
+header .sub { font-size: 0.82rem; opacity: 0.8; margin-top: 4px; }
+.badge { background: rgba(255,255,255,0.18); border-radius: 20px; padding: 5px 14px; font-size: 0.78rem; text-align:right; }
+.main { max-width: 1400px; margin: 0 auto; padding: 22px 20px; }
+.sec { font-size: 1rem; font-weight: 700; color: #172B4D; margin: 26px 0 12px; border-left: 4px solid #0052CC; padding-left: 10px; }
+/* KPI */
+.kpis { display: grid; grid-template-columns: repeat(5,1fr); gap: 12px; margin-bottom: 4px; }
+.kpi { background: white; border-radius: 10px; padding: 16px 18px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); border-top: 4px solid #ddd; }
+.kpi.b { border-top-color:#0052CC; } .kpi.r { border-top-color:#FF5630; }
+.kpi.y { border-top-color:#FF991F; } .kpi.g { border-top-color:#36B37E; }
+.kpi.p { border-top-color:#6554C0; }
+.kpi .lbl { font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#6B778C; margin-bottom:6px; }
+.kpi .val { font-size:2rem; font-weight:900; line-height:1; }
+.kpi.b .val{color:#0052CC;} .kpi.r .val{color:#FF5630;} .kpi.y .val{color:#FF991F;} .kpi.g .val{color:#36B37E;} .kpi.p .val{color:#6554C0;}
+.kpi .hint { font-size:0.74rem; color:#6B778C; margin-top:5px; }
+/* GRID */
+.g3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; margin-bottom:4px; }
+.g2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:4px; }
+.card { background:white; border-radius:10px; padding:18px; box-shadow:0 1px 4px rgba(0,0,0,0.08); }
+.card h3 { font-size:0.78rem; font-weight:700; color:#6B778C; text-transform:uppercase; letter-spacing:.04em; margin-bottom:12px; }
+.ch { position:relative; height:210px; }
+.ch-tall { position:relative; height:300px; }
+/* STREAM CARDS */
+.streams { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:4px; }
+.stream { background:white; border-radius:10px; padding:16px 18px; box-shadow:0 1px 4px rgba(0,0,0,0.08); border-left:5px solid #0052CC; }
+.stream.warn { border-left-color:#FF5630; }
+.stream.ok { border-left-color:#36B37E; }
+.stream .name { font-size:0.82rem; font-weight:700; color:#172B4D; margin-bottom:8px; }
+.stream .total { font-size:1.6rem; font-weight:900; color:#0052CC; }
+.stream.warn .total { color:#FF5630; }
+.stream.ok .total { color:#36B37E; }
+.stream .bars { display:flex; gap:3px; margin-top:8px; height:8px; border-radius:4px; overflow:hidden; }
+.stream .bar-o { background:#FF5630; } .stream .bar-a { background:#FF991F; }
+.stream .bar-r { background:#36B37E; } .stream .bar-c { background:#97A0AF; }
+.stream .legend { display:flex; gap:10px; margin-top:6px; flex-wrap:wrap; }
+.stream .leg { font-size:0.68rem; color:#6B778C; display:flex; align-items:center; gap:3px; }
+.stream .dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+.stream .high { display:inline-block; background:#FF5630; color:white; border-radius:3px; padding:1px 6px; font-size:0.68rem; font-weight:700; margin-left:4px; }
+/* TABLE */
+.tbl-card { background:white; border-radius:10px; padding:18px; box-shadow:0 1px 4px rgba(0,0,0,0.08); margin-bottom:4px; }
+.tbl-card h3 { font-size:0.78rem; font-weight:700; color:#6B778C; text-transform:uppercase; letter-spacing:.04em; margin-bottom:12px; }
+table { width:100%; border-collapse:collapse; font-size:0.81rem; }
+th { background:#F4F5F7; color:#6B778C; font-weight:700; text-align:left; padding:7px 10px; border-bottom:2px solid #DFE1E6; font-size:0.72rem; text-transform:uppercase; }
+td { padding:7px 10px; border-bottom:1px solid #F4F5F7; vertical-align:middle; }
+tr:last-child td { border-bottom:none; }
+tr:hover td { background:#FAFBFC; }
+a { color:#0052CC; text-decoration:none; font-weight:600; }
+a:hover { text-decoration:underline; }
+.pill { display:inline-block; border-radius:3px; padding:2px 7px; font-size:0.68rem; font-weight:700; text-transform:uppercase; }
+.s-open{background:#FFEBE6;color:#BF2600;} .s-assess{background:#FFF0B3;color:#FF8B00;}
+.s-resolved{background:#E3FCEF;color:#006644;} .s-closed{background:#EBECF0;color:#42526E;}
+.p-highest{background:#BF2600;color:white;} .p-high{background:#FF5630;color:white;}
+.p-medium{background:#0052CC;color:white;} .p-low{background:#36B37E;color:white;} .p-lowest{background:#6554C0;color:white;}
+.warn-txt { color:#FF5630; font-weight:700; }
+.alert { background:#FFFAE6; border:1px solid #FFD700; border-radius:8px; padding:10px 14px; margin-bottom:12px; font-size:0.82rem; }
+.links { display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; }
+.lbtn { background:white; border:1.5px solid #DFE1E6; border-radius:8px; padding:9px 14px; font-size:0.8rem; color:#0052CC; font-weight:600; text-decoration:none; display:inline-flex; align-items:center; gap:6px; box-shadow:0 1px 3px rgba(0,0,0,0.06); }
+.lbtn:hover { background:#0052CC; color:white; border-color:#0052CC; text-decoration:none; }
+/* PER-STREAM PRIORITY TABLE */
+.stream-detail { margin-bottom: 14px; }
+.stream-hdr { display:flex; align-items:center; gap:10px; padding:10px 14px; background:#F4F5F7; border-radius:8px 8px 0 0; border-bottom:2px solid #DFE1E6; }
+.stream-hdr .sname { font-size:0.85rem; font-weight:700; color:#172B4D; }
+.stream-hdr .stotal { font-size:0.78rem; color:#6B778C; margin-left:auto; }
+.pxs-grid { display:grid; grid-template-columns:repeat(5,1fr); }
+.pxs-cell { padding:10px; border-right:1px solid #F4F5F7; border-bottom:1px solid #F4F5F7; text-align:center; }
+.pxs-cell:last-child { border-right:none; }
+.pxs-cell .pxs-val { font-size:1.4rem; font-weight:800; }
+.pxs-cell .pxs-lbl { font-size:0.68rem; color:#6B778C; margin-top:2px; }
+.pxs-cell.has-high { background:#FFF5F5; }
+footer { text-align:center; font-size:0.72rem; color:#6B778C; padding:20px; margin-top:10px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="h1" style="font-size:1.35rem;font-weight:700;color:white;">🏥 MWIV Triage Health Dashboard</div>
+    <div class="sub">Modernized Work Item View · customerfeedback.atlassian.net · Queue <a href="https://customerfeedback.atlassian.net/jira/servicedesk/projects/MWIV/queues/custom/6118" style="color:rgba(255,255,255,0.85)">custom/6118</a></div>
+  </div>
+  <div class="badge">🔄 Last data sync: April 22, 2026 · 2:49 PM IST<br><span style="opacity:.7;font-size:.72rem;">9 Streams · 209 Issues</span></div>
+</header>
+
+<div class="main">
+
+<!-- ── KPIs ───────────────────────────────────────────────── -->
+<div class="sec">📊 At a Glance</div>
+<div class="kpis">
+  <div class="kpi b"><div class="lbl">Total Issues</div><div class="val"><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20ORDER%20BY%20created%20DESC" target="_blank" style="color:inherit">209</a></div><div class="hint">All time in MWIV</div></div>
+  <div class="kpi g"><div class="lbl">Resolved + Closed</div><div class="val"><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20status%20in%20(Resolved%2C%20Closed)%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit">59</a></div><div class="hint">27% completion rate</div></div>
+  <div class="kpi r"><div class="lbl">Open</div><div class="val"><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20status%20%3D%20Open%20ORDER%20BY%20created%20DESC" target="_blank" style="color:inherit">138</a></div><div class="hint">Needs triage / action</div></div>
+  <div class="kpi b"><div class="lbl">Open · Stream Assigned</div><div class="val"><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20status%20%3D%20Open%20AND%20team%20is%20not%20EMPTY%20ORDER%20BY%20created%20DESC" target="_blank" style="color:inherit">138</a></div><div class="hint">100% of open issues</div></div>
+  <div class="kpi y"><div class="lbl">Triaged</div><div class="val"><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20status%20%3D%20Assess%20ORDER%20BY%20created%20DESC" target="_blank" style="color:inherit">11</a></div><div class="hint">Triaging complete</div></div>
+</div>
+
+<!-- ── TOP CHARTS ─────────────────────────────────────────── -->
+<div class="sec">📈 Overall Metrics</div>
+<div class="g3">
+  <div class="card"><h3>Status Distribution</h3><div class="ch"><canvas id="statusChart"></canvas></div></div>
+  <div class="card"><h3>Priority (Open Issues)</h3><div class="ch"><canvas id="prioChart"></canvas></div></div>
+  <div class="card"><h3>Daily Volume — Created vs Resolved vs Closed</h3><div class="ch"><canvas id="volChart"></canvas></div></div>
+</div>
+
+<!-- ── STREAM OVERVIEW ───────────────────────────────────── -->
+<div class="sec">🗂️ Stream Overview</div>
+<div class="streams">
+
+  <!-- Attachments: 45 total, Open:33 Assess:2 Resolved:5 Closed:5, High:4+Highest:1 -->
+  <div class="stream warn">
+    <div class="name">📎 Attachments <span class="high">5 High+</span></div>
+    <div class="total"><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22a9442822-a58c-4f5a-9008-4efa084ba1c4%22%20ORDER%20BY%20created%20DESC" target="_blank" style="color:inherit;text-decoration:none">45</a></div>
+    <div class="bars">
+      <div class="bar-o" style="width:73%"></div>
+      <div class="bar-a" style="width:4%"></div>
+      <div class="bar-r" style="width:11%"></div>
+      <div class="bar-c" style="width:12%"></div>
+    </div>
+    <div class="legend">
+      <span class="leg"><span class="dot" style="background:#FF5630"></span><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22a9442822-a58c-4f5a-9008-4efa084ba1c4%22%20AND%20status%20%3D%20Open%20ORDER%20BY%20created%20DESC" target="_blank" style="color:inherit;text-decoration:none">Open: 34</a></span>
+      <span class="leg"><span class="dot" style="background:#FF991F"></span><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22a9442822-a58c-4f5a-9008-4efa084ba1c4%22%20AND%20status%20%3D%20Assess%20ORDER%20BY%20created%20DESC" target="_blank" style="color:inherit;text-decoration:none">Assess: 3</a></span>
+      <span class="leg"><span class="dot" style="background:#36B37E"></span><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22a9442822-a58c-4f5a-9008-4efa084ba1c4%22%20AND%20status%20%3D%20Resolved%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">Resolved: 6</a></span>
+      <span class="leg"><span class="dot" style="background:#97A0AF"></span><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22a9442822-a58c-4f5a-9008-4efa084ba1c4%22%20AND%20status%20%3D%20Closed%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">Closed: 0</a></span>
+    </div>
+  </div>
+
+  <!-- Preview Panel: 27 total, Open:24 Assess:2 Resolved:0 Closed:1 -->
+  <div class="stream warn">
+    <div class="name">🖼️ Preview Panel</div>
+    <div class="total"><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22fc9b20a0-ff5f-4d71-a6dd-1de99902547f%22%20ORDER%20BY%20created%20DESC" target="_blank" style="color:inherit;text-decoration:none">27</a></div>
+    <div class="bars">
+      <div class="bar-o" style="width:89%"></div>
+      <div class="bar-a" style="width:7%"></div>
+      <div class="bar-r" style="width:0%"></div>
+      <div class="bar-c" style="width:4%"></div>
+    </div>
+    <div class="legend">
+      <span class="leg"><span class="dot" style="background:#FF5630"></span><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22fc9b20a0-ff5f-4d71-a6dd-1de99902547f%22%20AND%20status%20%3D%20Open%20ORDER%20BY%20created%20DESC" target="_blank" style="color:inherit;text-decoration:none">Open: 25</a></span>
+      <span class="leg"><span class="dot" style="background:#FF991F"></span><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22fc9b20a0-ff5f-4d71-a6dd-1de99902547f%22%20AND%20status%20%3D%20Assess%20ORDER%20BY%20created%20DESC" target="_blank" style="color:inherit;text-decoration:none">Assess: 3</a></span>
+      <span class="leg"><span class="dot" style="background:#36B37E"></span>Resolved: 1</span>
+      <span class="leg"><span class="dot" style="background:#97A0AF"></span><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22fc9b20a0-ff5f-4d71-a6dd-1de99902547f%22%20AND%20status%20%3D%20Closed%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">Closed: 0</a></span>
+    </div>
+  </div>
+
+  <!-- Work Section: 25 total, Open:18 Assess:4 Resolved:3 Closed:0 -->
+  <div class="stream">
+    <div class="name">🔗 Work Section</div>
+    <div class="total"><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%220730fb9e-4aef-4872-988d-5ee50efa1c99%22%20ORDER%20BY%20created%20DESC" target="_blank" style="color:inherit;text-decoration:none">25</a></div>
+    <div class="bars">
+      <div class="bar-o" style="width:72%"></div>
+      <div class="bar-a" style="width:16%"></div>
+      <div class="bar-r" style="width:12%"></div>
+      <div class="bar-c" style="width:0%"></div>
+    </div>
+    <div class="legend">
+      <span class="leg"><span class="dot" style="background:#FF5630"></span><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%220730fb9e-4aef-4872-988d-5ee50efa1c99%22%20AND%20status%20%3D%20Open%20ORDER%20BY%20created%20DESC" target="_blank" style="color:inherit;text-decoration:none">Open: 17</a></span>
+      <span class="leg"><span class="dot" style="background:#FF991F"></span><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%220730fb9e-4aef-4872-988d-5ee50efa1c99%22%20AND%20status%20%3D%20Assess%20ORDER%20BY%20created%20DESC" target="_blank" style="color:inherit;text-decoration:none">Assess: 4</a></span>
+      <span class="leg"><span class="dot" style="background:#36B37E"></span><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%220730fb9e-4aef-4872-988d-5ee50efa1c99%22%20AND%20status%20%3D%20Resolved%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">Resolved: 4</a></span>
+      <span class="leg"><span class="dot" style="background:#97A0AF"></span>Closed: 0</span>
+    </div>
+  </div>
+
+  <!-- Comments: 16 total, Open:15 Assess:0 Resolved:0 Closed:1 -->
+  <div class="stream warn">
+    <div class="name">💬 Activity Panel</div>
+    <div class="total"><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%222d2d037b-bdaa-4b52-894b-52ee6f527eb0%22%20ORDER%20BY%20created%20DESC" target="_blank" style="color:inherit;text-decoration:none">16</a></div>
+    <div class="bars">
+      <div class="bar-o" style="width:94%"></div>
+      <div class="bar-a" style="width:0%"></div>
+      <div class="bar-r" style="width:0%"></div>
+      <div class="bar-c" style="width:6%"></div>
+    </div>
+    <div class="legend">
+      <span class="leg"><span class="dot" style="background:#FF5630"></span><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%222d2d037b-bdaa-4b52-894b-52ee6f527eb0%22%20AND%20status%20%3D%20Open%20ORDER%20BY%20created%20DESC" target="_blank" style="color:inherit;text-decoration:none">Open: 16</a></span>
+      <span class="leg"><span class="dot" style="background:#FF991F"></span>Assess: 0</span>
+      <span class="leg"><span class="dot" style="background:#36B37E"></span>Resolved: 0</span>
+      <span class="leg"><span class="dot" style="background:#97A0AF"></span><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%222d2d037b-bdaa-4b52-894b-52ee6f527eb0%22%20AND%20status%20%3D%20Closed%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">Closed: 0</a></span>
+    </div>
+  </div>
+
+  <!-- Global Elements: 15 total, Open:13 Assess:0 Resolved:0 Closed:2, High:1 -->
+  <div class="stream warn">
+    <div class="name">🌐 Global Elements <span class="high">1 High</span></div>
+    <div class="total"><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22e55d4807-9058-4f2e-b9d9-2a89bafb74b3%22%20ORDER%20BY%20created%20DESC" target="_blank" style="color:inherit;text-decoration:none">15</a></div>
+    <div class="bars">
+      <div class="bar-o" style="width:87%"></div>
+      <div class="bar-a" style="width:0%"></div>
+      <div class="bar-r" style="width:0%"></div>
+      <div class="bar-c" style="width:13%"></div>
+    </div>
+    <div class="legend">
+      <span class="leg"><span class="dot" style="background:#FF5630"></span><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22e55d4807-9058-4f2e-b9d9-2a89bafb74b3%22%20AND%20status%20%3D%20Open%20ORDER%20BY%20created%20DESC" target="_blank" style="color:inherit;text-decoration:none">Open: 14</a></span>
+      <span class="leg"><span class="dot" style="background:#FF991F"></span>Assess: 0</span>
+      <span class="leg"><span class="dot" style="background:#36B37E"></span>Resolved: 0</span>
+      <span class="leg"><span class="dot" style="background:#97A0AF"></span><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22e55d4807-9058-4f2e-b9d9-2a89bafb74b3%22%20AND%20status%20%3D%20Closed%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">Closed: 0</a></span>
+    </div>
+  </div>
+
+  <!-- Fields: 14 total, Open:13 Assess:0 Resolved:0 Closed:1 -->
+  <div class="stream warn">
+    <div class="name">📋 Fields</div>
+    <div class="total"><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22fc85ab23-d1d4-488a-b048-d64bc12dc5a5%22%20ORDER%20BY%20created%20DESC" target="_blank" style="color:inherit;text-decoration:none">14</a></div>
+    <div class="bars">
+      <div class="bar-o" style="width:93%"></div>
+      <div class="bar-a" style="width:0%"></div>
+      <div class="bar-r" style="width:0%"></div>
+      <div class="bar-c" style="width:7%"></div>
+    </div>
+    <div class="legend">
+      <span class="leg"><span class="dot" style="background:#FF5630"></span><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22fc85ab23-d1d4-488a-b048-d64bc12dc5a5%22%20AND%20status%20%3D%20Open%20ORDER%20BY%20created%20DESC" target="_blank" style="color:inherit;text-decoration:none">Open: 14</a></span>
+      <span class="leg"><span class="dot" style="background:#FF991F"></span>Assess: 0</span>
+      <span class="leg"><span class="dot" style="background:#36B37E"></span>Resolved: 0</span>
+      <span class="leg"><span class="dot" style="background:#97A0AF"></span><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22fc85ab23-d1d4-488a-b048-d64bc12dc5a5%22%20AND%20status%20%3D%20Closed%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">Closed: 0</a></span>
+    </div>
+  </div>
+
+  <!-- Ecosystem: 9 total, Open:9 Assess:0 Resolved:0 Closed:0 -->
+  <div class="stream warn">
+    <div class="name">🔌 Ecosystem</div>
+    <div class="total"><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%227c4fb51b-3cd7-4c29-b45a-9940ccdfa00c%22%20ORDER%20BY%20created%20DESC" target="_blank" style="color:inherit;text-decoration:none">9</a></div>
+    <div class="bars">
+      <div class="bar-o" style="width:100%"></div>
+    </div>
+    <div class="legend">
+      <span class="leg"><span class="dot" style="background:#FF5630"></span><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%227c4fb51b-3cd7-4c29-b45a-9940ccdfa00c%22%20AND%20status%20%3D%20Open%20ORDER%20BY%20created%20DESC" target="_blank" style="color:inherit;text-decoration:none">Open: 9</a></span>
+      <span class="leg"><span class="dot" style="background:#FF991F"></span>Assess: 0</span>
+      <span class="leg"><span class="dot" style="background:#36B37E"></span>Resolved: 0</span>
+      <span class="leg"><span class="dot" style="background:#97A0AF"></span>Closed: 0</span>
+    </div>
+  </div>
+
+  <!-- Overall WIV: 6 total, Open:6 Assess:0 Resolved:0 Closed:0 -->
+  <div class="stream">
+    <div class="name">🖥️ Overall WIV</div>
+    <div class="total"><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22c9ff66ad-50d6-432f-b776-6c31502230f1%22%20ORDER%20BY%20created%20DESC" target="_blank" style="color:inherit;text-decoration:none">6</a></div>
+    <div class="bars">
+      <div class="bar-o" style="width:100%"></div>
+    </div>
+    <div class="legend">
+      <span class="leg"><span class="dot" style="background:#FF5630"></span><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22c9ff66ad-50d6-432f-b776-6c31502230f1%22%20AND%20status%20%3D%20Open%20ORDER%20BY%20created%20DESC" target="_blank" style="color:inherit;text-decoration:none">Open: 6</a></span>
+      <span class="leg"><span class="dot" style="background:#FF991F"></span>Assess: 0</span>
+      <span class="leg"><span class="dot" style="background:#36B37E"></span>Resolved: 0</span>
+      <span class="leg"><span class="dot" style="background:#97A0AF"></span>Closed: 0</span>
+    </div>
+  </div>
+
+  <!-- 1P Cross App: 4 total, Open:3 Assess:0 Resolved:1 Closed:0 -->
+  <div class="stream ok">
+    <div class="name">🔀 1P Cross App</div>
+    <div class="total"><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22c9c013b5-6c75-44cb-8dcf-7eb616b059ad%22%20ORDER%20BY%20created%20DESC" target="_blank" style="color:inherit;text-decoration:none">4</a></div>
+    <div class="bars">
+      <div class="bar-o" style="width:75%"></div>
+      <div class="bar-a" style="width:0%"></div>
+      <div class="bar-r" style="width:25%"></div>
+    </div>
+    <div class="legend">
+      <span class="leg"><span class="dot" style="background:#FF5630"></span><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22c9c013b5-6c75-44cb-8dcf-7eb616b059ad%22%20AND%20status%20%3D%20Open%20ORDER%20BY%20created%20DESC" target="_blank" style="color:inherit;text-decoration:none">Open: 3</a></span>
+      <span class="leg"><span class="dot" style="background:#FF991F"></span>Assess: 0</span>
+      <span class="leg"><span class="dot" style="background:#36B37E"></span><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22c9c013b5-6c75-44cb-8dcf-7eb616b059ad%22%20AND%20status%20%3D%20Resolved%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">Resolved: 1</a></span>
+      <span class="leg"><span class="dot" style="background:#97A0AF"></span>Closed: 0</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── PRIORITY × STATUS OVERALL ─────────────────────────── -->
+<div class="sec">🔢 Priority × Status Matrix — Overall</div>
+<div class="tbl-card" style="margin-bottom:14px">
+  <table>
+    <thead><tr><th>Priority</th><th>Open</th><th>Assess</th><th>Resolved</th><th>Closed</th><th>Total</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill p-highest">Highest</span></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20priority%20%3D%20%22Highest%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">2</a></td><td>0</td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20priority%20%3D%20%22Highest%22%20AND%20status%20%3D%20%22Resolved%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">1</a></td><td>0</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20priority%20%3D%20%22Highest%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">3</a></strong></td></tr>
+      <tr><td><span class="pill p-high">High</span></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20priority%20%3D%20%22High%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">5</a></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20priority%20%3D%20%22High%22%20AND%20status%20%3D%20%22Assess%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">1</a></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20priority%20%3D%20%22High%22%20AND%20status%20%3D%20%22Resolved%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">2</a></td><td>0</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20priority%20%3D%20%22High%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">8</a></strong></td></tr>
+      <tr><td><span class="pill p-medium">Medium</span></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20priority%20%3D%20%22Medium%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">137</a></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20priority%20%3D%20%22Medium%22%20AND%20status%20%3D%20%22Assess%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">9</a></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20priority%20%3D%20%22Medium%22%20AND%20status%20%3D%20%22Resolved%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">26</a></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20priority%20%3D%20%22Medium%22%20AND%20status%20%3D%20%22Closed%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">29</a></td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20priority%20%3D%20%22Medium%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">202</a></strong></td></tr>
+      <tr><td><span class="pill p-low">Low</span></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20priority%20%3D%20%22Low%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">3</a></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20priority%20%3D%20%22Low%22%20AND%20status%20%3D%20%22Assess%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">1</a></td><td>0</td><td>0</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20priority%20%3D%20%22Low%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">4</a></strong></td></tr>
+      <tr style="background:#F4F5F7;font-weight:700;"><td>Total</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">147</a></strong></td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20status%20%3D%20%22Assess%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">11</a></strong></td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20status%20%3D%20%22Resolved%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">29</a></strong></td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20status%20%3D%20%22Closed%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">29</a></strong></td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">209</a></strong></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ── PRIORITY × STATUS PER STREAM ─────────────────────── -->
+<div class="sec">🔢 Priority × Status — Per Stream</div>
+<div class="g2" style="margin-bottom:14px">
+
+<div class="tbl-card">
+  <h3>📎 Attachments <span class="high">5 High+</span></h3>
+  <table>
+    <thead><tr><th>Priority</th><th>Open</th><th>Assess</th><th>Resolved</th><th>Closed</th><th>Total</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill p-highest">Highest</span></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22a9442822-a58c-4f5a-9008-4efa084ba1c4%22%20AND%20priority%20%3D%20%22Highest%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">1</a></td><td>0</td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22a9442822-a58c-4f5a-9008-4efa084ba1c4%22%20AND%20priority%20%3D%20%22Highest%22%20AND%20status%20%3D%20%22Resolved%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">1</a></td><td>0</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22a9442822-a58c-4f5a-9008-4efa084ba1c4%22%20AND%20priority%20%3D%20%22Highest%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">2</a></strong></td></tr>
+      <tr><td><span class="pill p-high">High</span></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22a9442822-a58c-4f5a-9008-4efa084ba1c4%22%20AND%20priority%20%3D%20%22High%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">4</a></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22a9442822-a58c-4f5a-9008-4efa084ba1c4%22%20AND%20priority%20%3D%20%22High%22%20AND%20status%20%3D%20%22Assess%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">1</a></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22a9442822-a58c-4f5a-9008-4efa084ba1c4%22%20AND%20priority%20%3D%20%22High%22%20AND%20status%20%3D%20%22Resolved%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">2</a></td><td>0</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22a9442822-a58c-4f5a-9008-4efa084ba1c4%22%20AND%20priority%20%3D%20%22High%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">7</a></strong></td></tr>
+      <tr><td><span class="pill p-medium">Medium</span></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22a9442822-a58c-4f5a-9008-4efa084ba1c4%22%20AND%20priority%20%3D%20%22Medium%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">28</a></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22a9442822-a58c-4f5a-9008-4efa084ba1c4%22%20AND%20priority%20%3D%20%22Medium%22%20AND%20status%20%3D%20%22Assess%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">1</a></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22a9442822-a58c-4f5a-9008-4efa084ba1c4%22%20AND%20priority%20%3D%20%22Medium%22%20AND%20status%20%3D%20%22Resolved%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">9</a></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22a9442822-a58c-4f5a-9008-4efa084ba1c4%22%20AND%20priority%20%3D%20%22Medium%22%20AND%20status%20%3D%20%22Closed%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">16</a></td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22a9442822-a58c-4f5a-9008-4efa084ba1c4%22%20AND%20priority%20%3D%20%22Medium%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">54</a></strong></td></tr>
+      <tr><td><span class="pill p-low">Low</span></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22a9442822-a58c-4f5a-9008-4efa084ba1c4%22%20AND%20priority%20%3D%20%22Low%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">2</a></td><td>0</td><td>0</td><td>0</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22a9442822-a58c-4f5a-9008-4efa084ba1c4%22%20AND%20priority%20%3D%20%22Low%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">2</a></strong></td></tr>
+      <tr style="background:#F4F5F7;font-weight:700;"><td>Total</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22a9442822-a58c-4f5a-9008-4efa084ba1c4%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">35</a></strong></td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22a9442822-a58c-4f5a-9008-4efa084ba1c4%22%20AND%20status%20%3D%20%22Assess%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">2</a></strong></td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22a9442822-a58c-4f5a-9008-4efa084ba1c4%22%20AND%20status%20%3D%20%22Resolved%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">12</a></strong></td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22a9442822-a58c-4f5a-9008-4efa084ba1c4%22%20AND%20status%20%3D%20%22Closed%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">16</a></strong></td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22a9442822-a58c-4f5a-9008-4efa084ba1c4%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">65</a></strong></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="tbl-card">
+  <h3>🖼️ Preview Panel</h3>
+  <table>
+    <thead><tr><th>Priority</th><th>Open</th><th>Assess</th><th>Resolved</th><th>Closed</th><th>Total</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill p-medium">Medium</span></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22fc9b20a0-ff5f-4d71-a6dd-1de99902547f%22%20AND%20priority%20%3D%20%22Medium%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">25</a></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22fc9b20a0-ff5f-4d71-a6dd-1de99902547f%22%20AND%20priority%20%3D%20%22Medium%22%20AND%20status%20%3D%20%22Assess%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">2</a></td><td>0</td><td>0</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22fc9b20a0-ff5f-4d71-a6dd-1de99902547f%22%20AND%20priority%20%3D%20%22Medium%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">27</a></strong></td></tr>
+      <tr style="background:#F4F5F7;font-weight:700;"><td>Total</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22fc9b20a0-ff5f-4d71-a6dd-1de99902547f%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">25</a></strong></td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22fc9b20a0-ff5f-4d71-a6dd-1de99902547f%22%20AND%20status%20%3D%20%22Assess%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">2</a></strong></td><td><strong>0</strong></td><td><strong>0</strong></td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22fc9b20a0-ff5f-4d71-a6dd-1de99902547f%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">27</a></strong></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="tbl-card">
+  <h3>🔗 Work Section</h3>
+  <table>
+    <thead><tr><th>Priority</th><th>Open</th><th>Assess</th><th>Resolved</th><th>Closed</th><th>Total</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill p-medium">Medium</span></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%220730fb9e-4aef-4872-988d-5ee50efa1c99%22%20AND%20priority%20%3D%20%22Medium%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">15</a></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%220730fb9e-4aef-4872-988d-5ee50efa1c99%22%20AND%20priority%20%3D%20%22Medium%22%20AND%20status%20%3D%20%22Assess%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">3</a></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%220730fb9e-4aef-4872-988d-5ee50efa1c99%22%20AND%20priority%20%3D%20%22Medium%22%20AND%20status%20%3D%20%22Resolved%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">6</a></td><td>0</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%220730fb9e-4aef-4872-988d-5ee50efa1c99%22%20AND%20priority%20%3D%20%22Medium%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">24</a></strong></td></tr>
+      <tr><td><span class="pill p-low">Low</span></td><td>0</td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%220730fb9e-4aef-4872-988d-5ee50efa1c99%22%20AND%20priority%20%3D%20%22Low%22%20AND%20status%20%3D%20%22Assess%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">1</a></td><td>0</td><td>0</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%220730fb9e-4aef-4872-988d-5ee50efa1c99%22%20AND%20priority%20%3D%20%22Low%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">1</a></strong></td></tr>
+      <tr style="background:#F4F5F7;font-weight:700;"><td>Total</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%220730fb9e-4aef-4872-988d-5ee50efa1c99%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">15</a></strong></td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%220730fb9e-4aef-4872-988d-5ee50efa1c99%22%20AND%20status%20%3D%20%22Assess%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">4</a></strong></td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%220730fb9e-4aef-4872-988d-5ee50efa1c99%22%20AND%20status%20%3D%20%22Resolved%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">6</a></strong></td><td><strong>0</strong></td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%220730fb9e-4aef-4872-988d-5ee50efa1c99%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">25</a></strong></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="tbl-card">
+  <h3>💬 Activity Panel</h3>
+  <table>
+    <thead><tr><th>Priority</th><th>Open</th><th>Assess</th><th>Resolved</th><th>Closed</th><th>Total</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill p-medium">Medium</span></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%222d2d037b-bdaa-4b52-894b-52ee6f527eb0%22%20AND%20priority%20%3D%20%22Medium%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">16</a></td><td>0</td><td>0</td><td>0</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%222d2d037b-bdaa-4b52-894b-52ee6f527eb0%22%20AND%20priority%20%3D%20%22Medium%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">16</a></strong></td></tr>
+      <tr style="background:#F4F5F7;font-weight:700;"><td>Total</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%222d2d037b-bdaa-4b52-894b-52ee6f527eb0%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">16</a></strong></td><td><strong>0</strong></td><td><strong>0</strong></td><td><strong>0</strong></td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%222d2d037b-bdaa-4b52-894b-52ee6f527eb0%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">16</a></strong></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="tbl-card">
+  <h3>🌐 Global Elements <span class="high">2 High+</span></h3>
+  <table>
+    <thead><tr><th>Priority</th><th>Open</th><th>Assess</th><th>Resolved</th><th>Closed</th><th>Total</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill p-highest">Highest</span></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22e55d4807-9058-4f2e-b9d9-2a89bafb74b3%22%20AND%20priority%20%3D%20%22Highest%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">1</a></td><td>0</td><td>0</td><td>0</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22e55d4807-9058-4f2e-b9d9-2a89bafb74b3%22%20AND%20priority%20%3D%20%22Highest%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">1</a></strong></td></tr>
+      <tr><td><span class="pill p-high">High</span></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22e55d4807-9058-4f2e-b9d9-2a89bafb74b3%22%20AND%20priority%20%3D%20%22High%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">1</a></td><td>0</td><td>0</td><td>0</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22e55d4807-9058-4f2e-b9d9-2a89bafb74b3%22%20AND%20priority%20%3D%20%22High%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">1</a></strong></td></tr>
+      <tr><td><span class="pill p-medium">Medium</span></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22e55d4807-9058-4f2e-b9d9-2a89bafb74b3%22%20AND%20priority%20%3D%20%22Medium%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">13</a></td><td>0</td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22e55d4807-9058-4f2e-b9d9-2a89bafb74b3%22%20AND%20priority%20%3D%20%22Medium%22%20AND%20status%20%3D%20%22Resolved%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">1</a></td><td>0</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22e55d4807-9058-4f2e-b9d9-2a89bafb74b3%22%20AND%20priority%20%3D%20%22Medium%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">14</a></strong></td></tr>
+      <tr><td><span class="pill p-low">Low</span></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22e55d4807-9058-4f2e-b9d9-2a89bafb74b3%22%20AND%20priority%20%3D%20%22Low%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">1</a></td><td>0</td><td>0</td><td>0</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22e55d4807-9058-4f2e-b9d9-2a89bafb74b3%22%20AND%20priority%20%3D%20%22Low%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">1</a></strong></td></tr>
+      <tr style="background:#F4F5F7;font-weight:700;"><td>Total</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22e55d4807-9058-4f2e-b9d9-2a89bafb74b3%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">16</a></strong></td><td><strong>0</strong></td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22e55d4807-9058-4f2e-b9d9-2a89bafb74b3%22%20AND%20status%20%3D%20%22Resolved%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">1</a></strong></td><td><strong>0</strong></td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22e55d4807-9058-4f2e-b9d9-2a89bafb74b3%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">17</a></strong></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="tbl-card">
+  <h3>📋 Fields</h3>
+  <table>
+    <thead><tr><th>Priority</th><th>Open</th><th>Assess</th><th>Resolved</th><th>Closed</th><th>Total</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill p-medium">Medium</span></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22fc85ab23-d1d4-488a-b048-d64bc12dc5a5%22%20AND%20priority%20%3D%20%22Medium%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">14</a></td><td>0</td><td>0</td><td>0</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22fc85ab23-d1d4-488a-b048-d64bc12dc5a5%22%20AND%20priority%20%3D%20%22Medium%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">14</a></strong></td></tr>
+      <tr style="background:#F4F5F7;font-weight:700;"><td>Total</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22fc85ab23-d1d4-488a-b048-d64bc12dc5a5%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">14</a></strong></td><td><strong>0</strong></td><td><strong>0</strong></td><td><strong>0</strong></td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22fc85ab23-d1d4-488a-b048-d64bc12dc5a5%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">14</a></strong></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="tbl-card">
+  <h3>🔌 Ecosystem</h3>
+  <table>
+    <thead><tr><th>Priority</th><th>Open</th><th>Assess</th><th>Resolved</th><th>Closed</th><th>Total</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill p-medium">Medium</span></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%227c4fb51b-3cd7-4c29-b45a-9940ccdfa00c%22%20AND%20priority%20%3D%20%22Medium%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">9</a></td><td>0</td><td>0</td><td>0</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%227c4fb51b-3cd7-4c29-b45a-9940ccdfa00c%22%20AND%20priority%20%3D%20%22Medium%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">9</a></strong></td></tr>
+      <tr style="background:#F4F5F7;font-weight:700;"><td>Total</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%227c4fb51b-3cd7-4c29-b45a-9940ccdfa00c%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">9</a></strong></td><td><strong>0</strong></td><td><strong>0</strong></td><td><strong>0</strong></td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%227c4fb51b-3cd7-4c29-b45a-9940ccdfa00c%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">9</a></strong></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="tbl-card">
+  <h3>🖥️ Overall WIV</h3>
+  <table>
+    <thead><tr><th>Priority</th><th>Open</th><th>Assess</th><th>Resolved</th><th>Closed</th><th>Total</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill p-medium">Medium</span></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22c9ff66ad-50d6-432f-b776-6c31502230f1%22%20AND%20priority%20%3D%20%22Medium%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">6</a></td><td>0</td><td>0</td><td>0</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22c9ff66ad-50d6-432f-b776-6c31502230f1%22%20AND%20priority%20%3D%20%22Medium%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">6</a></strong></td></tr>
+      <tr style="background:#F4F5F7;font-weight:700;"><td>Total</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22c9ff66ad-50d6-432f-b776-6c31502230f1%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">6</a></strong></td><td><strong>0</strong></td><td><strong>0</strong></td><td><strong>0</strong></td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22c9ff66ad-50d6-432f-b776-6c31502230f1%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">6</a></strong></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="tbl-card">
+  <h3>🔀 1P Cross App</h3>
+  <table>
+    <thead><tr><th>Priority</th><th>Open</th><th>Assess</th><th>Resolved</th><th>Closed</th><th>Total</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill p-medium">Medium</span></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22c9c013b5-6c75-44cb-8dcf-7eb616b059ad%22%20AND%20priority%20%3D%20%22Medium%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">3</a></td><td>0</td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22c9c013b5-6c75-44cb-8dcf-7eb616b059ad%22%20AND%20priority%20%3D%20%22Medium%22%20AND%20status%20%3D%20%22Resolved%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">1</a></td><td><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22c9c013b5-6c75-44cb-8dcf-7eb616b059ad%22%20AND%20priority%20%3D%20%22Medium%22%20AND%20status%20%3D%20%22Closed%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">1</a></td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22c9c013b5-6c75-44cb-8dcf-7eb616b059ad%22%20AND%20priority%20%3D%20%22Medium%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">5</a></strong></td></tr>
+      <tr style="background:#F4F5F7;font-weight:700;"><td>Total</td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22c9c013b5-6c75-44cb-8dcf-7eb616b059ad%22%20AND%20status%20%3D%20%22Open%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">3</a></strong></td><td><strong>0</strong></td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22c9c013b5-6c75-44cb-8dcf-7eb616b059ad%22%20AND%20status%20%3D%20%22Resolved%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">1</a></strong></td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22c9c013b5-6c75-44cb-8dcf-7eb616b059ad%22%20AND%20status%20%3D%20%22Closed%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">1</a></strong></td><td><strong><a href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22c9c013b5-6c75-44cb-8dcf-7eb616b059ad%22%20ORDER%20BY%20updated%20DESC" target="_blank" style="color:inherit;text-decoration:none">5</a></strong></td></tr>
+    </tbody>
+  </table>
+</div>
+
+</div><!-- end g2 -->
+
+<!-- ── HIGH PRIORITY ───────────────────────────────────────── -->
+<div class="sec">🚨 High / Highest Priority Open Issues</div>
+<div class="tbl-card" style="margin-bottom:14px">
+  <table>
+    <thead><tr><th>Issue</th><th>Stream</th><th>Summary</th><th>Priority</th><th>Status</th><th>Assignee</th></tr></thead>
+    <tbody>
+      <tr><td><a href="https://customerfeedback.atlassian.net/browse/MWIV-99" target="_blank">MWIV-99</a></td><td>📎 Attachments</td><td>Grid/list view preference not persisted</td><td><span class="pill p-highest">Highest</span></td><td><span class="pill s-open">Open</span></td><td>Burhanuddin U.</td></tr>
+      <tr><td><a href="https://customerfeedback.atlassian.net/browse/MWIV-191" target="_blank">MWIV-191</a></td><td>🌐 Global Elements</td><td>Cannot switch between Details and Automation</td><td><span class="pill p-high">High</span></td><td><span class="pill s-open">Open</span></td><td class="warn-txt">⚠ Unassigned</td></tr>
+      <tr><td><a href="https://customerfeedback.atlassian.net/browse/MWIV-57" target="_blank">MWIV-57</a></td><td>📎 Attachments</td><td>Adding attachments from comments/worklog broken</td><td><span class="pill p-high">High</span></td><td><span class="pill s-open">Open</span></td><td>Roopal J.</td></tr>
+      <tr><td><a href="https://customerfeedback.atlassian.net/browse/MWIV-168" target="_blank">MWIV-168</a></td><td>📎 Attachments</td><td>'Delete all' capability not available in Attachments</td><td><span class="pill p-high">High</span></td><td><span class="pill s-open">Open</span></td><td>Burhanuddin U.</td></tr>
+      <tr><td><a href="https://customerfeedback.atlassian.net/browse/MWIV-167" target="_blank">MWIV-167</a></td><td>📎 Attachments</td><td>'Add attachment' from Quick Actions broken when collapsed</td><td><span class="pill p-high">High</span></td><td><span class="pill s-open">Open</span></td><td>Roopal J.</td></tr>
+      <tr><td><a href="https://customerfeedback.atlassian.net/browse/MWIV-163" target="_blank">MWIV-163</a></td><td>📎 Attachments</td><td>Loom videos don't appear without page refresh</td><td><span class="pill p-high">High</span></td><td><span class="pill s-open">Open</span></td><td>Roopal J.</td></tr>
+      <tr><td><a href="https://customerfeedback.atlassian.net/browse/MWIV-108" target="_blank">MWIV-108</a></td><td>📎 Attachments</td><td>Links without view permission show as raw URLs</td><td><span class="pill p-high">High</span></td><td><span class="pill s-open">Open</span></td><td>Parshwa N.</td></tr>
+      <tr><td><a href="https://customerfeedback.atlassian.net/browse/MWIV-96" target="_blank">MWIV-96</a></td><td>📎 Attachments</td><td>Cannot paste unresolvable weblink in Attachments</td><td><span class="pill p-high">High</span></td><td><span class="pill s-assess">Assess</span></td><td>Parshwa N.</td></tr>
+      <tr><td><a href="https://customerfeedback.atlassian.net/browse/MWIV-94" target="_blank">MWIV-94</a></td><td>📎 Attachments</td><td>Confluence link treated as weblink instead of smart link</td><td><span class="pill p-high">High</span></td><td><span class="pill s-assess">Assess</span></td><td>Parshwa N.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ── WORKLOAD CHART ──────────────────────────────────────── -->
+<div class="sec">👥 Workload by Assignee (Open Issues)</div>
+<div class="card" style="margin-bottom:14px">
+  <div class="ch-tall"><canvas id="assigneeChart"></canvas></div>
+</div>
+
+<!-- ── QUICK LINKS ────────────────────────────────────────── -->
+<div class="sec">🔗 Quick Links</div>
+<div class="links">
+  <a class="lbtn" href="https://customerfeedback.atlassian.net/jira/servicedesk/projects/MWIV/queues/custom/6118" target="_blank">📋 Triage Queue</a>
+  <a class="lbtn" href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20status%20%3D%20Open%20AND%20assignee%20is%20EMPTY" target="_blank">⚠️ Unassigned Open</a>
+  <a class="lbtn" href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20priority%20in%20(High%2C%20Highest)%20AND%20status%20%3D%20Open" target="_blank">🚨 High Priority Open</a>
+  <a class="lbtn" href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20created%20%3E%3D%20-7d" target="_blank">📅 Created This Week</a>
+  <a class="lbtn" href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22a9442822-a58c-4f5a-9008-4efa084ba1c4%22" target="_blank">📎 Attachments Stream</a>
+  <a class="lbtn" href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%22fc9b20a0-ff5f-4d71-a6dd-1de99902547f%22" target="_blank">🖼️ Preview Panel Stream</a>
+  <a class="lbtn" href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20AND%20team%20%3D%20%220730fb9e-4aef-4872-988d-5ee50efa1c99%22" target="_blank">🔗 Work Section Stream</a>
+  <a class="lbtn" href="https://customerfeedback.atlassian.net/issues/?jql=project%20%3D%20MWIV%20ORDER%20BY%20created%20DESC" target="_blank">🗂️ All MWIV Issues</a>
+</div>
+
+<footer>Data sourced from customerfeedback.atlassian.net · MWIV Project · Generated April 22, 2026</footer>
+
+</div><!-- end main -->
+
+<script>
+// STATUS DONUT
+new Chart(document.getElementById('statusChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Open (138)', 'Assess (11)', 'Resolved (30)', 'Closed (29)'],
+    datasets: [{ data: [138,11,30,29], backgroundColor: ['#FF5630','#FF991F','#36B37E','#97A0AF'], borderWidth: 2, borderColor: '#fff' }]
+  },
+  options: { responsive:true, maintainAspectRatio:false, cutout:'62%',
+    plugins: { legend: { position:'bottom', labels:{ padding:10, font:{size:11} } } }
+  }
+});
+
+// PRIORITY DONUT
+new Chart(document.getElementById('prioChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Highest (3)', 'High (8)', 'Medium (202)', 'Low (4)'],
+    datasets: [{ data: [2,8,200,4], backgroundColor: ['#BF2600','#FF5630','#0052CC','#36B37E','#6554C0'], borderWidth: 2, borderColor: '#fff' }]
+  },
+  options: { responsive:true, maintainAspectRatio:false, cutout:'62%',
+    plugins: { legend: { position:'bottom', labels:{ padding:10, font:{size:11} } } }
+  }
+});
+
+// VOLUME LINE CHART
+new Chart(document.getElementById('volChart'), {
+  type: 'line',
+  data: {
+    labels: ['Apr 16', 'Apr 17', 'Apr 18', 'Apr 19', 'Apr 20', 'Apr 21', 'Apr 22'],
+    datasets: [
+      {
+        label: 'Created',
+        data: [64, 11, 47, 1, 53, 20, 6],
+        borderColor: '#0052CC',
+        backgroundColor: 'rgba(0,82,204,0.08)',
+        borderWidth: 2.5,
+        pointBackgroundColor: '#0052CC',
+        pointRadius: 4,
+        tension: 0.3,
+        fill: true
+      },
+      {
+        label: 'Resolved',
+        data: [4, 1, 0, 0, 0, 9, 18],
+        borderColor: '#36B37E',
+        backgroundColor: 'rgba(54,179,126,0.08)',
+        borderWidth: 2.5,
+        pointBackgroundColor: '#36B37E',
+        pointRadius: 4,
+        tension: 0.3,
+        fill: true
+      },
+      {
+        label: 'Closed',
+        data: [8, 0, 2, 0, 13, 4, 2],
+        borderColor: '#97A0AF',
+        backgroundColor: 'rgba(151,160,175,0.08)',
+        borderWidth: 2.5,
+        pointBackgroundColor: '#97A0AF',
+        pointRadius: 4,
+        tension: 0.3,
+        fill: true
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom', labels: { padding: 12, font: { size: 11 } } },
+      tooltip: { mode: 'index', intersect: false }
+    },
+    scales: {
+      x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+      y: { beginAtZero: true, ticks: { precision: 0, font: { size: 10 } }, grid: { color: '#F4F5F7' } }
+    }
+  }
+});
+
+// STREAM STACKED BAR
+new Chart(document.getElementById('streamChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Attachments','Preview Panel','Work Section','Activity Panel','Global Elements','Fields','Ecosystem','Overall WIV','1P Cross App'],
+    datasets: [
+      { label:'Open',     data:[34,25,15,16,16,14,9,6,3], backgroundColor:'#FF5630', borderRadius:0 },
+      { label:'Assess',   data:[3,2,4,0,0,0,0,0,0],        backgroundColor:'#FF991F' },
+      { label:'Resolved', data:[6,0,3,0,1,0,0,0,1],        backgroundColor:'#36B37E' },
+      { label:'Closed',   data:[2,0,0,0,0,1,0,0,0],        backgroundColor:'#97A0AF' }
+    ]
+  },
+  options: {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{ position:'bottom', labels:{padding:12,font:{size:11}} },
+      tooltip:{ callbacks:{ footer: items => 'Total: '+items.reduce((s,i)=>s+i.parsed.y,0) } }
+    },
+    scales:{
+      x:{ stacked:true, grid:{display:false}, ticks:{font:{size:11}} },
+      y:{ stacked:true, beginAtZero:true, ticks:{precision:0,font:{size:11}}, grid:{color:'#F4F5F7'} }
+    }
+  }
+});
+
+// ASSIGNEE HORIZONTAL BAR
+new Chart(document.getElementById('assigneeChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Kritika Bahl','Varun Kumar','Parshwa N. Jain','Yugandhar Kamdi','Vishal Tekwani','Jagjit Singh','Unassigned','Tarun Khanna','Kunal Naithani','Roopal Jasnani','Pratham Bhatia','Gautham Renganathan','Rajan Singh','Prerna Rao','Amrutanshu Tyagi','Burhanuddin U.'],
+    datasets: [{
+      label:'Open Issues',
+      data:[23,14,13,12,11,9,11,6,6,5,2,3,3,3,3,2],
+      backgroundColor: (ctx) => ctx.label === 'Unassigned' ? '#FF5630' : '#0052CC',
+      borderRadius: 4
+    }]
+  },
+  options: {
+    indexAxis:'y', responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{display:false} },
+    scales:{
+      x:{ beginAtZero:true, ticks:{precision:0,font:{size:11}}, grid:{color:'#F4F5F7'} },
+      y:{ grid:{display:false}, ticks:{font:{size:11}} }
+    }
+  }
+});
+</script>
+
+</body>
+</html>
